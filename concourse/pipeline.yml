@@ -1,0 +1,62 @@
+---
+resources:
+# The application we'll be building/testing/deploying.
+- name: app
+  type: git
+  source:
+    uri: https://gitlab.com/drawsmcgraw/hello-ci.git
+
+# The Cloud Foundry we'll be deploying to.
+- name: deploy-web-app
+  type: cf
+  source:
+    api: ((cf-api))
+    username: ((cf-username))
+    password: ((cf-password))
+    organization: ((cf-organization))
+    space: ((cf-space))
+    skip_cert_check: true
+
+jobs:
+- name: deploy-app
+  public: true
+  serial: true
+  plan:
+
+  # Clone the application.
+  # Specify 'trigger: true' so our pipeline triggers
+  # when new code is pushed.
+  - get: app
+    trigger: true
+
+  # Run the tests.
+  - task: web-app-tests
+
+    # Specify the 'linux' platform. Note: This could also be 
+    # 'windows' or 'darwin'.
+    config:
+      platform: linux
+
+      image_resource:
+        type: docker-image
+        source: {repository: java, tag: 8}
+
+      # Specify that we need the 'app' resource defined above.
+      inputs:
+      - name: app
+
+      # Make everything in the 'target' directory available to 
+      # subsequent pipelines.
+      outputs:
+      - name: app/target
+
+      run:
+        path: ./mvnw
+        args: ['package']
+        dir: app
+
+  # Deploy the application to the Cloud Foundry resource
+  # defined above.
+  - put: deploy-web-app
+    params:
+      manifest: app/manifest.yml
